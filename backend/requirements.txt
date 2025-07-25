@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+sentence-transformers
+faiss-cpu
+PyMuPDF
+python-multipart
+ollama  # If you're using local mistral
