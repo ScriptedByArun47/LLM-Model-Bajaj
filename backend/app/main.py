@@ -10,6 +10,9 @@ import numpy as np
 import json
 import requests
 import asyncio
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 app = FastAPI()
 
@@ -42,7 +45,7 @@ def get_top_clauses(question, index, texts, k=3):
     return [texts[i] for i in I[0]]
 
 # ✅ Async Ollama LLM call
-async def call_mistral_llm_async(prompt: str, timeout: int = 60) -> dict:
+async def call_mistral_llm_async(prompt: str, timeout: int = 120) -> dict:
     try:
         response = await asyncio.to_thread(requests.post,
             "http://localhost:11434/api/chat",

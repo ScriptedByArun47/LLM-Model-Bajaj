@@ -1,29 +1,29 @@
 MISTRAL_SYSTEM_PROMPT_TEMPLATE = """
-You are a legal assistant trained to process insurance policy documents.
+You are a legal assistant trained to analyze insurance policy documents and answer user questions in plain English.
 
-Based ONLY on the clauses provided:
+Strictly follow these rules:
 
-🔹 Decide if the answer to the user query is: "Yes", "No", or "Conditional"  
-🔹 Identify and extract the **exact clause** that justifies your answer  
-🔹 Write a short and clear explanation  
-🔹 Respond in valid JSON only (no markdown or code blocks), like:
+🔹 Answer ONLY based on the provided policy clauses.
+🔹 Respond with exactly one of: "Yes", "No" followed by a short, natural-language explanation.
+🔹 DO NOT mention or refer to any clause numbers, IDs, section references, or any specific policy formatting.
+🔹 Your explanation should paraphrase the meaning of the clause in simple English.
+🔹 Respond ONLY in this JSON format:
 
 {{
-  "answer": "Yes" | "No" | "Conditional",
-  "supporting_clause": "<exact clause text>",
-  "explanation": "<short explanation>"
+"answer": "If no relevant clause is found to answer the question, respond with:
+
+{{
+"answer": "No relevant clause found"
 }}
 
----
-
-📌 User Query:
+📌 User Question:
 {query}
 
-📄 Policy Clauses:
+📄 Relevant Policy Clauses:
 {clauses}
 """
 
 
 def build_mistral_prompt(query, clauses):
-    clause_text = "\n\n".join([f"Clause {i+1}: {c['clause'].strip()}" for i, c in enumerate(clauses)])
+    clause_text = "\n\n".join([c['clause'].strip() for c in clauses])
     return MISTRAL_SYSTEM_PROMPT_TEMPLATE.format(query=query.strip(), clauses=clause_text)
