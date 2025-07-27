@@ -1,3 +1,4 @@
+# main.py
 from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import List, Union
@@ -12,7 +13,11 @@ import requests
 import asyncio
 import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Import the Google GenAI library
+import google.generativeai as genai
+
+#sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 app = FastAPI()
 
@@ -30,6 +35,15 @@ class HackRxRequest(BaseModel):
 
 model = SentenceTransformer("all-MiniLM-L6-v2")
 
+# Configure Google Generative AI with your API key
+# It's recommended to load this from an environment variable
+genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
+
+# Initialize the GenAI model
+# You can choose a different model if 'gemini-pro' is not suitable
+genai_model = genai.GenerativeModel('gemini-2.0-flash')
+
+
 # ✅ Build FAISS index with clause embeddings
 def build_faiss_index(clauses):
     texts = [c["clause"] for c in clauses]
@@ -44,33 +58,27 @@ def get_top_clauses(question, index, texts, k=3):
     _, I = index.search(np.array(q_vector), k)
     return [texts[i] for i in I[0]]
 
-# ✅ Async Ollama LLM call
-async def call_mistral_llm_async(prompt: str, timeout: int = 120) -> dict:
+# ✅ Async GenAI LLM call
+async def call_genai_llm_async(prompt: str, timeout: int = 120) -> dict:
     try:
-        response = await asyncio.to_thread(requests.post,
-            "http://localhost:11434/api/chat",
-            json={
-                "model": "mistral",
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": "You are a legal assistant trained to process insurance policy documents."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                "stream": False
-            },
-            timeout=timeout
+        # The prompt already includes system instructions and user query based on MISTRAL_SYSTEM_PROMPT_TEMPLATE
+        # So, we can directly pass it as the user content to the GenAI model.
+        # GenAI's chat structure typically handles alternating user/model roles.
+        # For a single prompt, you can use generate_content directly.
+        response = await asyncio.to_thread(
+            genai_model.generate_content,
+            contents=[
+                {"role": "user", "parts": [prompt]}
+            ]
         )
-        response.raise_for_status()
-        raw_output = response.json().get("message", {}).get("content", "").strip()
+        raw_output = response.text.strip()
+        
+        # The prompt template expects a JSON output, so attempt to parse it
         if raw_output.startswith("```json"):
             raw_output = raw_output.replace("```json", "").replace("```", "").strip()
         return json.loads(raw_output)
     except Exception as e:
+        print(f"Error calling GenAI API: {e}")
         return {
             "answer": "Error",
             "supporting_clause": "None",
@@ -92,8 +100,12 @@ async def hackrx_run(req: HackRxRequest):
     async def process_question(q):
         top_clauses = get_top_clauses(q, index, clause_texts, k=3)
         formatted_clauses = "\n".join([f"{i+1}. {c}" for i, c in enumerate(top_clauses)])
+        
+        # Use the existing prompt template
         prompt = MISTRAL_SYSTEM_PROMPT_TEMPLATE.format(query=q, clauses=formatted_clauses)
-        return await call_mistral_llm_async(prompt)
+        
+        # Call the updated GenAI function
+        return await call_genai_llm_async(prompt)
 
     results = await asyncio.gather(*[process_question(q) for q in req.questions])
     return {"answers": results}
